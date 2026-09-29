@@ -1,0 +1,40 @@
+# Render blueprint for the Military Asset Management System backend.
+#
+# Create the service with:  New > Blueprint > point Render at this repository.
+#
+# All secrets are read from the environment and are deliberately NOT stored in
+# this file. Set them in Render > your service > Environment before the first
+# deploy, or let Render fill them from the secret store.
+services:
+  - type: web
+    name: mams-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /api/health
+    # Render free instances sleep after inactivity and are not suitable for a
+    # database-backed API, so the starter plan is used.
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION_MS
+        value: "43200000"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: CORS_ALLOWED_ORIGIN_PATTERNS
+        value: "https://*.vercel.app"
+      - key: BOOTSTRAP_ENABLED
+        value: "true"
+      - key: DEFAULT_ADMIN_USERNAME
+        value: "admin"
+      - key: DEFAULT_ADMIN_PASSWORD
+        sync: false
+      - key: LOG_FILE
+        value: "logs/app.log"

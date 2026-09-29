@@ -1,0 +1,249 @@
+:root {
+  --mms-navy: #16233b;
+  --mms-navy-light: #22345a;
+  --mms-accent: #0d6efd;
+  --mms-sidebar-width: 240px;
+}
+
+body {
+  background-color: #f4f6fa;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+/* ---------- Layout ---------- */
+.mms-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--mms-sidebar-width);
+  background: var(--mms-navy);
+  overflow-y: auto;
+  z-index: 1030;
+}
+
+.mms-sidebar .brand {
+  color: #fff;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.mms-sidebar .brand-logo {
+  border-radius: 0.5rem;
+  flex: 0 0 auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.mms-sidebar .brand-text {
+  min-width: 0;
+}
+
+.mms-sidebar .brand strong {
+  display: block;
+  font-size: 0.98rem;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+
+.mms-sidebar .brand span {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #9db2d8;
+}
+
+.mms-sidebar .nav-link {
+  color: #cbd6ec;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  border-left: 3px solid transparent;
+}
+
+.mms-sidebar .nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mms-sidebar .nav-link.active {
+  color: #fff;
+  background: var(--mms-navy-light);
+  border-left-color: var(--mms-accent);
+}
+
+.mms-main {
+  margin-left: var(--mms-sidebar-width);
+  min-height: 100vh;
+}
+
+.mms-topbar {
+  background: #fff;
+  border-bottom: 1px solid #e3e7ef;
+  padding: 0.75rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}
+
+.mms-content {
+  padding: 1.5rem;
+}
+
+.mms-role-badge {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- Cards / stats ---------- */
+.mms-stat {
+  border: 1px solid #e3e7ef;
+  border-radius: 0.6rem;
+  background: #fff;
+  padding: 0.9rem 1rem;
+  height: 100%;
+}
+
+.mms-stat .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6c7a91;
+}
+
+.mms-stat .value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.mms-stat.clickable {
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.mms-stat.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(22, 35, 59, 0.12);
+}
+
+.mms-card {
+  background: #fff;
+  border: 1px solid #e3e7ef;
+  border-radius: 0.6rem;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.mms-card h5 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Table ---------- */
+.mms-table {
+  font-size: 0.87rem;
+}
+
+.mms-table th {
+  background: #f8fafc;
+  border-bottom: 2px solid #e3e7ef;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5b6a82;
+  white-space: nowrap;
+}
+
+.mms-table td {
+  vertical-align: middle;
+}
+
+/* ---------- Modal ---------- */
+.mms-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 1050;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+  overflow-y: auto;
+}
+
+.mms-modal {
+  background: #fff;
+  border-radius: 0.6rem;
+  width: 100%;
+  max-width: 640px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+}
+
+.mms-modal.modal-lg {
+  max-width: 900px;
+}
+
+.mms-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.15rem;
+  border-bottom: 1px solid #e3e7ef;
+}
+
+.mms-modal-header h5 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mms-modal-body {
+  padding: 1.15rem;
+}
+
+.mms-modal-footer {
+  padding: 0.85rem 1.15rem;
+  border-top: 1px solid #e3e7ef;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---------- Login ---------- */
+.mms-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #16233b 0%, #29406e 100%);
+  padding: 1rem;
+}
+
+.mms-login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.mms-login-logo {
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(13, 31, 56, 0.28);
+}
+
+.mms-hint {
+  font-size: 0.75rem;
+  color: #6c7a91;
+}
+
+.mms-table td.num,
+.mms-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

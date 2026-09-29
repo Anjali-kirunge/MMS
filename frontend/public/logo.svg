@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Military Asset Management System">
+  <defs>
+    <linearGradient id="mams-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b3a63"/>
+      <stop offset="1" stop-color="#0d1f38"/>
+    </linearGradient>
+    <linearGradient id="mams-steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c9d6e5"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#mams-bg)"/>
+
+  <!-- shield -->
+  <path d="M32 9.5 53 17v16.5C53 45 44.5 53.4 32 58 19.5 53.4 11 45 11 33.5V17Z"
+        fill="none" stroke="url(#mams-steel)" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- three chevrons: supply, movement, readiness -->
+  <g fill="none" stroke="#d9a441" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 24.5 32 19l9 5.5"/>
+    <path d="M23 32 32 26.5 41 32"/>
+    <path d="M23 39.5 32 34l9 5.5"/>
+  </g>
+</svg>
