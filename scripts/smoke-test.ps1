@@ -265,6 +265,18 @@ Check "POST /api/expenditures consumes assets" ($expenditure.Status -eq 201) "HT
 $afterExpend = (Invoke-Api -Path "/api/inventory?baseId=$baseId&equipmentTypeId=$eqId" -Token $adminToken).Body.content[0].onHandQuantity
 Check "Expenditure reduced stock by 3" ($afterExpend -eq $afterAssign - 3) "before=$afterAssign after=$afterExpend"
 
+$overExpend = Invoke-Api -Method POST -Path "/api/expenditures" -Token $adminToken -Body @{
+    baseId          = $baseId
+    equipmentTypeId = $eqId
+    quantity        = 100000
+    expendedDate    = "2026-01-21"
+    reason          = "Over-expenditure probe"
+}
+Check "Expenditure beyond available stock is rejected (409)" ($overExpend.Status -eq 409) "HTTP $($overExpend.Status)"
+
+$afterFailedExpend = (Invoke-Api -Path "/api/inventory?baseId=$baseId&equipmentTypeId=$eqId" -Token $adminToken).Body.content[0].onHandQuantity
+Check "Rejected expenditure left stock untouched" ($afterFailedExpend -eq $afterExpend) "before=$afterExpend after=$afterFailedExpend"
+
 $overAssign = Invoke-Api -Method POST -Path "/api/assignments" -Token $adminToken -Body @{
     baseId          = $baseId
     personnelId     = $ownPersonnel.id
