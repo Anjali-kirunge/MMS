@@ -11,10 +11,12 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    # Free plan. A free instance sleeps after 15 minutes without traffic and
+    # cold starts can exceed a minute, so the API is intermittently unavailable
+    # and the first request after an idle period may time out. Raise the plan to
+    # `starter` when the service needs to stay reachable.
+    plan: free
     healthCheckPath: /api/health
-    # Render free instances sleep after inactivity and are not suitable for a
-    # database-backed API, so the starter plan is used.
     envVars:
       - key: DB_URL
         sync: false

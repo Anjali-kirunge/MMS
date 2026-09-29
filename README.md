@@ -282,7 +282,11 @@ Environment**, never in the repository:
 | `DEFAULT_ADMIN_PASSWORD` | the first administrator's password |
 
 `SERVER_PORT` is not required: the app reads the `PORT` variable Render injects.
-The free plan is not usable here — it sleeps on idle and disconnects the database.
+
+The blueprint uses the **free** plan. A free instance sleeps after 15 minutes
+without traffic, so the API is intermittently unavailable, cold starts can exceed
+a minute, and the database connection is dropped while it sleeps. Change `plan`
+to `starter` in `render.yaml` when the service needs to stay reachable.
 
 Deploy the backend **first**, then deploy the frontend, because the frontend build
 bakes in the backend URL.
