@@ -12,16 +12,39 @@
     The database is intentionally left with the transactions created here, so
     re-apply database\military_asset_management.sql after running this script.
 
+    Seeded-account passwords are never committed. Supply the three test logins
+    with the -AdminPassword, -CommanderPassword and -LogisticsPassword
+    parameters, or through the MAMS_ADMIN_PASSWORD, MAMS_COMMANDER_PASSWORD and
+    MAMS_LOGISTICS_PASSWORD environment variables.
+
 .PARAMETER BaseUrl
     Backend base URL. Defaults to http://localhost:8080
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1 `
+        -AdminPassword "<admin-password>" `
+        -CommanderPassword "<commander-password>" `
+        -LogisticsPassword "<logistics-password>"
 #>
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = "http://localhost:8080"
+    [string]$BaseUrl = "http://localhost:8080",
+    [string]$AdminUsername = $(if ($env:MAMS_ADMIN_USERNAME) { $env:MAMS_ADMIN_USERNAME } else { "admin" }),
+    [string]$AdminPassword = $(if ($env:MAMS_ADMIN_PASSWORD) { $env:MAMS_ADMIN_PASSWORD } else { "" }),
+    [string]$CommanderUsername = "gen.alpha",
+    [string]$CommanderPassword = $(if ($env:MAMS_COMMANDER_PASSWORD) { $env:MAMS_COMMANDER_PASSWORD } else { "" }),
+    [string]$LogisticsUsername = "logistics",
+    [string]$LogisticsPassword = $(if ($env:MAMS_LOGISTICS_PASSWORD) { $env:MAMS_LOGISTICS_PASSWORD } else { "" })
 )
+
+foreach ($required in @(
+    @{ Name = "AdminPassword"; Value = $AdminPassword; Env = "MAMS_ADMIN_PASSWORD" },
+    @{ Name = "CommanderPassword"; Value = $CommanderPassword; Env = "MAMS_COMMANDER_PASSWORD" },
+    @{ Name = "LogisticsPassword"; Value = $LogisticsPassword; Env = "MAMS_LOGISTICS_PASSWORD" })) {
+    if ([string]::IsNullOrEmpty($required.Value)) {
+        throw "No $($required.Name) supplied. Pass -$($required.Name), or set the $($required.Env) environment variable before running."
+    }
+}
 
 $ErrorActionPreference = "Stop"
 $script:pass = 0
@@ -95,25 +118,25 @@ Section "Authentication"
 $anon = Invoke-Api -Path "/api/inventory"
 Check "Anonymous request is rejected with 401" ($anon.Status -eq 401) "HTTP $($anon.Status)"
 
-$bad = Invoke-Api -Method POST -Path "/api/auth/login" -Body @{ username = "admin"; password = "wrong-password" }
+$bad = Invoke-Api -Method POST -Path "/api/auth/login" -Body @{ username = $AdminUsername; password = "wrong-password" }
 Check "Wrong password returns 401" ($bad.Status -eq 401) "HTTP $($bad.Status)"
 
-$admin = Login "admin" "admin123"
+$admin = Login $AdminUsername $AdminPassword
 $adminToken = $admin.token
 Check "admin can sign in and receives a JWT" ($admin.token.Length -gt 100) "token length=$($admin.token.Length)"
 Check "admin role is reported as ADMIN" ($admin.user.role -eq "ADMIN") $admin.user.role
 
-$commander = Login "gen.alpha" "commander123"
+$commander = Login $CommanderUsername $CommanderPassword
 $commanderToken = $commander.token
 Check "gen.alpha can sign in as BASE_COMMANDER" ($commander.user.role -eq "BASE_COMMANDER") $commander.user.role
 Check "commander is bound to a base" ($null -ne $commander.user.baseId) "baseId=$($commander.user.baseId)"
 
-$logistics = Login "logistics" "logistics123"
+$logistics = Login $LogisticsUsername $LogisticsPassword
 $logisticsToken = $logistics.token
 Check "logistics can sign in as LOGISTICS_OFFICER" ($logistics.user.role -eq "LOGISTICS_OFFICER") $logistics.user.role
 
 $me = Invoke-Api -Path "/api/auth/me" -Token $adminToken
-Check "GET /api/auth/me returns the signed-in user" ($me.Status -eq 200 -and $me.Body.username -eq "admin") $me.Raw
+Check "GET /api/auth/me returns the signed-in user" ($me.Status -eq 200 -and $me.Body.username -eq $AdminUsername) $me.Raw
 
 Section "Role-based access control"
 $forbidden = Invoke-Api -Path "/api/users" -Token $commanderToken
@@ -406,7 +429,7 @@ Check "ADMIN can delete a user (204)" ($userDeleted.Status -eq 204) "HTTP $($use
 
 $commanderUsers = Invoke-Api -Method POST -Path "/api/users" -Token $commanderToken -Body @{
     username = "commander.attempt"
-    password = "commander123"
+    password = "NotAccepted123"
     fullName = "Should Not Exist"
     role     = "LOGISTICS_OFFICER"
 }

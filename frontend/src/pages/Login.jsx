@@ -3,11 +3,18 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { ErrorAlert } from '../components/Feedback.jsx'
 
-const TEST_ACCOUNTS = [
-  { username: 'admin', password: 'admin123', role: 'ADMIN' },
-  { username: 'gen.alpha', password: 'commander123', role: 'BASE_COMMANDER · BAM' },
-  { username: 'logistics', password: 'logistics123', role: 'LOGISTICS_OFFICER' },
-]
+// Optional convenience shortcuts for local development, read from Vite env
+// variables rather than committed here: a working password must never be part
+// of the source tree. Set VITE_DEV_ACCOUNT_ADMIN etc. in frontend/.env.local
+// (git-ignored) if you want the buttons; leave them unset and the list is
+// empty. The production build drops this block entirely.
+const DEV_ACCOUNTS = [
+  { username: import.meta.env.VITE_DEV_ACCOUNT_ADMIN, role: 'ADMIN' },
+  { username: import.meta.env.VITE_DEV_ACCOUNT_COMMANDER, role: 'BASE_COMMANDER · BAM' },
+  { username: import.meta.env.VITE_DEV_ACCOUNT_LOGISTICS, role: 'LOGISTICS_OFFICER' },
+].filter((account) => Boolean(account.username))
+
+const DEV_LOGINS = import.meta.env.DEV ? DEV_ACCOUNTS : []
 
 export default function Login() {
   const { login, token } = useAuth()
@@ -71,8 +78,8 @@ export default function Login() {
             </label>
             <input
               id="password"
-              type="password"
               className="form-control"
+              type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -84,27 +91,28 @@ export default function Login() {
           </button>
         </form>
 
-        <hr className="my-4" />
-        <p className="mms-hint mb-2 fw-semibold">Test accounts</p>
-        <div className="d-flex flex-column gap-1">
-          {TEST_ACCOUNTS.map((account) => (
-            <button
-              key={account.username}
-              type="button"
-              className="btn btn-sm btn-outline-secondary text-start d-flex justify-content-between"
-              onClick={() => {
-                setUsername(account.username)
-                setPassword(account.password)
-                setError(null)
-              }}
-            >
-              <span>
-                {account.username} / {account.password}
-              </span>
-              <span className="mms-hint">{account.role}</span>
-            </button>
-          ))}
-        </div>
+        {DEV_LOGINS.length > 0 ? (
+          <>
+            <hr className="my-4" />
+            <p className="mms-hint mb-2 fw-semibold">Test accounts</p>
+            <div className="d-flex flex-column gap-1">
+              {DEV_LOGINS.map((account) => (
+                <button
+                  key={account.username}
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary text-start d-flex justify-content-between"
+                  onClick={() => {
+                    setUsername(account.username)
+                    setError(null)
+                  }}
+                >
+                  <span>{account.username}</span>
+                  <span className="mms-hint">{account.role}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   )

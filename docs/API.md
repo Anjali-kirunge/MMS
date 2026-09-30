@@ -14,7 +14,7 @@ All endpoints except `POST /api/auth/login` and `GET /api/health` require a bear
 POST /api/auth/login
 Content-Type: application/json
 
-{ "username": "admin", "password": "admin123" }
+{ "username": "<username>", "password": "<password>" }
 ```
 
 ```json

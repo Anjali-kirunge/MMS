@@ -7,26 +7,26 @@
     it drops and recreates the schema, so every transaction and audit entry is
     removed. Run it whenever you want to return to the seeded demo state.
 
-.EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1
-    powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 -MysqlPassword "s3cret"
+    Credentials have no committed default. Supply them with -Username/-Password
+    or through the MYSQL_USER / MYSQL_PASSWORD environment variables, so no
+    password is stored in the repository.
 
 .DESCRIPTION
     Managed MySQL hosts such as Aiven require TLS, so pass -SslMode REQUIRED
     when the target is not a local server.
 
 .EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 -Username root -Password "<local-password>"
     powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 `
-        -Host_ mysql-xxxx.region.aivencloud.com -Port 14711 `
-        -Username avnadmin -Password "s3cret" -SslMode REQUIRED
+        -Host_ <db-host> -Port <db-port> -Username <db-user> -Password "<db-password>" -SslMode REQUIRED
 #>
 [CmdletBinding()]
 param(
     [string]$MysqlExecutable = "mysql",
     [string]$Host_ = "localhost",
     [int]$Port = 3306,
-    [string]$Username = "root",
-    [string]$Password = "root",
+    [string]$Username = $(if ($env:MYSQL_USER) { $env:MYSQL_USER } else { "root" }),
+    [string]$Password = $(if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { "" }),
     # Managed MySQL providers such as Aiven require TLS. Local MySQL does not.
     [ValidateSet("DISABLED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY")]
     [string]$SslMode = "DISABLED",
@@ -55,6 +55,10 @@ if (-not (Get-Command $MysqlExecutable -ErrorAction SilentlyContinue)) {
         throw "mysql client not found. Install it or pass -MysqlExecutable <path>."
     }
     $MysqlExecutable = $candidates[0]
+}
+
+if ([string]::IsNullOrEmpty($Password)) {
+    throw "No database password supplied. Pass -Password, or set MYSQL_PASSWORD before running."
 }
 
 $arguments = @(

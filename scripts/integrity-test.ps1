@@ -22,7 +22,12 @@
 param(
     [string]$BaseUrl = "http://localhost:8080",
     [string]$DbUser = "root",
-    [string]$DbPassword = "root",
+    # No committed default: pass -DbPassword or set MYSQL_PASSWORD.
+    [string]$DbPassword = $(if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { "" }),
+    # Login for the ADMIN account under test, same rule: pass -AdminUsername and
+    # -AdminPassword, or set MAMS_ADMIN_USERNAME / MAMS_ADMIN_PASSWORD.
+    [string]$AdminUsername = $(if ($env:MAMS_ADMIN_USERNAME) { $env:MAMS_ADMIN_USERNAME } else { "admin" }),
+    [string]$AdminPassword = $(if ($env:MAMS_ADMIN_PASSWORD) { $env:MAMS_ADMIN_PASSWORD } else { "" }),
     [string]$DbName = "military_asset_management",
     [string]$DbHost = "",
     [int]$DbPort = 0,
@@ -35,6 +40,13 @@ $ErrorActionPreference = "Stop"
 $script:pass = 0
 $script:fail = 0
 $script:failures = New-Object System.Collections.Generic.List[string]
+
+if ([string]::IsNullOrEmpty($DbPassword)) {
+    throw "No database password supplied. Pass -DbPassword, or set MYSQL_PASSWORD before running."
+}
+if ([string]::IsNullOrEmpty($AdminPassword)) {
+    throw "No admin password supplied. Pass -AdminPassword, or set MAMS_ADMIN_PASSWORD before running."
+}
 
 $mysql = (Get-Command mysql -ErrorAction SilentlyContinue).Source
 if (-not $mysql) {
@@ -113,8 +125,8 @@ function Section { param([string]$Title) Write-Host "`n== $Title" -ForegroundCol
 Write-Host "Military Asset Management System - data integrity verification" -ForegroundColor White
 Write-Host "API: $BaseUrl    Database: $DbName" -ForegroundColor DarkGray
 
-$login = Invoke-Api -Method POST -Path "/api/auth/login" -Body @{ username = "admin"; password = "admin123" }
-if ($login.Status -ne 200) { throw "Cannot sign in as admin (HTTP $($login.Status)): $($login.Raw)" }
+$login = Invoke-Api -Method POST -Path "/api/auth/login" -Body @{ username = $AdminUsername; password = $AdminPassword }
+if ($login.Status -ne 200) { throw "Cannot sign in as $AdminUsername (HTTP $($login.Status)): $($login.Raw)" }
 $token = $login.Body.token
 
 Section "Data lives in MySQL"

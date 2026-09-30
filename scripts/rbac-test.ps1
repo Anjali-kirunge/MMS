@@ -17,14 +17,37 @@
                           reference data; blocked from users, personnel,
                           assignments, expenditures, bases and equipment types
 
+    Seeded-account passwords are never committed. Supply the three test logins
+    with the -AdminPassword, -CommanderPassword and -LogisticsPassword
+    parameters, or through the MAMS_ADMIN_PASSWORD, MAMS_COMMANDER_PASSWORD and
+    MAMS_LOGISTICS_PASSWORD environment variables.
+
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\scripts\rbac-test.ps1
-    powershell -ExecutionPolicy Bypass -File .\scripts\rbac-test.ps1 -BaseUrl https://mams-backend.onrender.com
+    powershell -ExecutionPolicy Bypass -File .\scripts\rbac-test.ps1 `
+        -AdminPassword "<admin-password>" `
+        -CommanderPassword "<commander-password>" `
+        -LogisticsPassword "<logistics-password>"
+    powershell -ExecutionPolicy Bypass -File .\scripts\rbac-test.ps1 -BaseUrl https://<api-host>/api
 #>
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = "http://localhost:8080"
+    [string]$BaseUrl = "http://localhost:8080",
+    [string]$AdminUsername = $(if ($env:MAMS_ADMIN_USERNAME) { $env:MAMS_ADMIN_USERNAME } else { "admin" }),
+    [string]$AdminPassword = $(if ($env:MAMS_ADMIN_PASSWORD) { $env:MAMS_ADMIN_PASSWORD } else { "" }),
+    [string]$CommanderUsername = "gen.alpha",
+    [string]$CommanderPassword = $(if ($env:MAMS_COMMANDER_PASSWORD) { $env:MAMS_COMMANDER_PASSWORD } else { "" }),
+    [string]$LogisticsUsername = "logistics",
+    [string]$LogisticsPassword = $(if ($env:MAMS_LOGISTICS_PASSWORD) { $env:MAMS_LOGISTICS_PASSWORD } else { "" })
 )
+
+foreach ($required in @(
+    @{ Name = "AdminPassword"; Value = $AdminPassword; Env = "MAMS_ADMIN_PASSWORD" },
+    @{ Name = "CommanderPassword"; Value = $CommanderPassword; Env = "MAMS_COMMANDER_PASSWORD" },
+    @{ Name = "LogisticsPassword"; Value = $LogisticsPassword; Env = "MAMS_LOGISTICS_PASSWORD" })) {
+    if ([string]::IsNullOrEmpty($required.Value)) {
+        throw "No $($required.Name) supplied. Pass -$($required.Name), or set the $($required.Env) environment variable before running."
+    }
+}
 
 $ErrorActionPreference = "Stop"
 $script:pass = 0
@@ -89,17 +112,17 @@ function Expect {
 Write-Host "Military Asset Management System - RBAC verification against $BaseUrl" -ForegroundColor White
 
 Section "Sign in as each role"
-$admin = Login "admin" "admin123"
+$admin = Login $AdminUsername $AdminPassword
 $adminToken = $admin.token
 Check "ADMIN signs in with role ADMIN" ($admin.user.role -eq "ADMIN") $admin.user.role
 
-$commander = Login "gen.alpha" "commander123"
+$commander = Login $CommanderUsername $CommanderPassword
 $commanderToken = $commander.token
 $myBase = $commander.user.baseId
 Check "BASE_COMMANDER signs in and is bound to a base" ($commander.user.role -eq "BASE_COMMANDER" -and $null -ne $myBase) `
     "role=$($commander.user.role) baseId=$myBase"
 
-$logistics = Login "logistics" "logistics123"
+$logistics = Login $LogisticsUsername $LogisticsPassword
 $logisticsToken = $logistics.token
 Check "LOGISTICS_OFFICER signs in with role LOGISTICS_OFFICER" ($logistics.user.role -eq "LOGISTICS_OFFICER") $logistics.user.role
 
@@ -138,22 +161,30 @@ Expect "ADMIN" "GET"  "/api/users/roles"                     200 $null $adminTok
 Expect "ADMIN" "GET"  "/api/bases"                           200 $null $adminToken
 Expect "ADMIN" "GET"  "/api/equipment-types"                 200 $null $adminToken
 
+# A unique suffix per run keeps the suite re-runnable. A fixed code collides
+# with a row left behind by an interrupted earlier run, the POST then returns
+# 409, and every later reference to the null response body throws.
+$runTag = "{0}{1}" -f (Get-Date -Format "HHmmss"), $PID
+
 $adminBase = Invoke-Api -Method POST -Path "/api/bases" -Token $adminToken -Body @{
-    code = "RBAC-TMP"; name = "RBAC Temporary Base"; location = "Test"; commander = "None"
+    code = "RBAC-$runTag"; name = "RBAC Temporary Base"; location = "Test"; commander = "None"
 }
 Check "ADMIN can create a base (201)" ($adminBase.Status -eq 201) "HTTP $($adminBase.Status) $($adminBase.Raw)"
+if ($null -eq $adminBase.Body) { throw "Base creation failed (HTTP $($adminBase.Status)); aborting before the null dereference." }
 Expect "ADMIN" "DELETE" "/api/bases/$($adminBase.Body.id)" 204 $null $adminToken
 
 $adminType = Invoke-Api -Method POST -Path "/api/equipment-types" -Token $adminToken -Body @{
-    code = "RBAC-TMP"; name = "RBAC Temporary Type"; category = "Test"; unit = "pcs"; description = "RBAC"
+    code = "RBAC-$runTag"; name = "RBAC Temporary Type"; category = "Test"; unit = "pcs"; description = "RBAC"
 }
 Check "ADMIN can create an equipment type (201)" ($adminType.Status -eq 201) "HTTP $($adminType.Status)"
+if ($null -eq $adminType.Body) { throw "Equipment type creation failed (HTTP $($adminType.Status))." }
 Expect "ADMIN" "DELETE" "/api/equipment-types/$($adminType.Body.id)" 204 $null $adminToken
 
 $adminUser = Invoke-Api -Method POST -Path "/api/users" -Token $adminToken -Body @{
-    username = "rbac.tmp"; password = "rbac12345"; fullName = "RBAC Temporary"; role = "LOGISTICS_OFFICER"
+    username = "rbac.tmp.$runTag"; password = "rbac12345"; fullName = "RBAC Temporary"; role = "LOGISTICS_OFFICER"
 }
 Check "ADMIN can create a user (201)" ($adminUser.Status -eq 201) "HTTP $($adminUser.Status) $($adminUser.Raw)"
+if ($null -eq $adminUser.Body) { throw "User creation failed (HTTP $($adminUser.Status))." }
 Expect "ADMIN" "DELETE" "/api/users/$($adminUser.Body.id)" 204 $null $adminToken
 
 Section "BASE_COMMANDER is confined to their own base"
@@ -239,7 +270,7 @@ if ($foreignTransfer) {
 Section "BASE_COMMANDER is blocked from user administration"
 Expect "BASE_COMMANDER" "GET"    "/api/users"        403 $null $commanderToken
 Expect "BASE_COMMANDER" "GET"    "/api/users/roles"  403 $null $commanderToken
-Expect "BASE_COMMANDER" "POST"   "/api/users"        403 @{ username = "cmd.attempt"; password = "commander123"; fullName = "No"; role = "LOGISTICS_OFFICER" } $commanderToken
+Expect "BASE_COMMANDER" "POST"   "/api/users"        403 @{ username = "cmd.attempt"; password = "NotAccepted123"; fullName = "No"; role = "LOGISTICS_OFFICER" } $commanderToken
 Expect "BASE_COMMANDER" "POST"   "/api/bases"        403 @{ code = "CMDX"; name = "Commander Base"; location = "x"; commander = "y" } $commanderToken
 Expect "BASE_COMMANDER" "POST"   "/api/equipment-types" 403 @{ code = "CMDX"; name = "Commander Type"; category = "x"; unit = "pcs" } $commanderToken
 Expect "BASE_COMMANDER" "PUT"    "/api/bases/$myBase" 403 @{ code = $allBases[0].code; name = "Renamed" } $commanderToken
@@ -256,7 +287,7 @@ Expect "LOGISTICS_OFFICER" "GET"  "/api/equipment-types" 200 $null $logisticsTok
 Section "LOGISTICS_OFFICER is blocked from the restricted modules"
 Expect "LOGISTICS_OFFICER" "GET"    "/api/users"        403 $null $logisticsToken
 Expect "LOGISTICS_OFFICER" "GET"    "/api/users/roles"  403 $null $logisticsToken
-Expect "LOGISTICS_OFFICER" "POST"   "/api/users"        403 @{ username = "log.attempt"; password = "logistics123"; fullName = "No"; role = "ADMIN" } $logisticsToken
+Expect "LOGISTICS_OFFICER" "POST"   "/api/users"        403 @{ username = "log.attempt"; password = "NotAccepted123"; fullName = "No"; role = "ADMIN" } $logisticsToken
 Expect "LOGISTICS_OFFICER" "GET"    "/api/personnel"    403 $null $logisticsToken
 Expect "LOGISTICS_OFFICER" "GET"    "/api/personnel/search" 403 $null $logisticsToken
 Expect "LOGISTICS_OFFICER" "POST"   "/api/personnel"    403 @{ serviceNumber = "X-1"; fullName = "No"; baseId = $anyBaseId } $logisticsToken

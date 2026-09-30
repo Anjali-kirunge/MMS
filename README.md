@@ -39,19 +39,28 @@ automatically.
 
 ```powershell
 # 1. Create and seed the schema (destructive: drops and recreates the database)
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 -Password root
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 -Password <your-local-mysql-password>
 
-# 2. Start the API on http://localhost:8080
+# 2. Provide the secrets the API requires. There is no committed default for
+#    any of these, by design. Set them once per shell.
+$env:DB_USERNAME = "<your-local-mysql-user>"
+$env:DB_PASSWORD = "<your-local-mysql-password>"
+$env:JWT_SECRET  = (openssl rand -base64 48)
+$env:DEFAULT_ADMIN_PASSWORD = "<a-local-admin-password>"
+
+# 3. Start the API on http://localhost:8080
 cd backend
 mvn spring-boot:run
 
-# 3. In a second terminal, start the UI on http://localhost:5173
+# 4. In a second terminal, start the UI on http://localhost:5173
 cd frontend
 npm install
 npm run dev
 ```
 
-Open <http://localhost:5173> and sign in as `admin` / `admin123`.
+Open <http://localhost:5173> and sign in as `admin` with the
+`DEFAULT_ADMIN_PASSWORD` you set above. Copying `.env.example` to `.env` and
+filling it in is a convenient alternative; `.env` is git-ignored.
 
 The Vite dev server proxies `/api` to `http://localhost:8080`, so no CORS
 configuration is needed in development.
@@ -62,10 +71,17 @@ Three suites exercise the running stack through real HTTP calls and the real
 MySQL schema. Start the backend and UI first, then run them in order.
 
 ```powershell
+# The suites sign in as the seeded accounts, whose passwords are not committed.
+# Export them once per shell, or pass each script's matching -...Password switch.
+$env:MAMS_ADMIN_PASSWORD      = "<admin-password>"
+$env:MAMS_COMMANDER_PASSWORD  = "<commander-password>"
+$env:MAMS_LOGISTICS_PASSWORD  = "<logistics-password>"
+$env:MYSQL_PASSWORD           = "<mysql-password>"
+
 # 97 checks - every role, every base scope, and token forgery/tampering
 powershell -ExecutionPolicy Bypass -File .\scripts\rbac-test.ps1
 
-# 74 checks - health, dashboard formula, the four transaction flows including
+# 76 checks - health, dashboard formula, the four transaction flows including
 # rollback cases, administration, and the append-only audit trail
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 
@@ -73,6 +89,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 # no-negative-stock guarantees, transaction rollback, and audit coverage
 powershell -ExecutionPolicy Bypass -File .\scripts\integrity-test.ps1
 ```
+
+Each script also accepts the values as parameters (`-AdminPassword`,
+`-DbPassword`, `-BaseUrl`, and so on); see the header of each file. All three
+exit early with an actionable message if a required password is missing, rather
+than falling back to a value from the repository.
 
 The RBAC and smoke suites write real transactions to the database. Re-run
 `setup-database.ps1 -DropFirst` afterwards to return to the seeded state.
@@ -87,19 +108,21 @@ Both applications read their configuration from environment variables.
 | Variable | Used by | Default | Purpose |
 | --- | --- | --- | --- |
 | `DB_URL` | backend | `jdbc:mysql://localhost:3306/military_asset_management?...` | JDBC URL, schema name must stay `military_asset_management` |
-| `DB_USERNAME` | backend | `root` | Database user |
-| `DB_PASSWORD` | backend | `root` | Database password |
-| `JWT_SECRET` | backend | development key | HS256 signing key — **change in production** |
+| `DB_USERNAME` | backend | **none — required** | Database user |
+| `DB_PASSWORD` | backend | **none — required** | Database password |
+| `JWT_SECRET` | backend | **none — required** | HS256 signing key. The app will not start without it and no fallback is committed. Generate with `openssl rand -base64 48`; keep it only in the platform secret store |
 | `JWT_EXPIRATION_MS` | backend | `43200000` | Token lifetime (12 h) |
 | `CORS_ALLOWED_ORIGINS` | backend | `http://localhost:5173,...` | Comma separated browser origins |
 | `CORS_ALLOWED_ORIGIN_PATTERNS` | backend | empty | Optional wildcard origins, e.g. `https://*.vercel.app`, so preview deployments are accepted |
 | `SERVER_PORT` | backend | `8080` | API port (Render injects `PORT`, which the app honours) |
-| `VITE_API_BASE_URL` | frontend | empty | Leave empty in dev; set to `https://api.example.com` for a split deployment |
+| `VITE_API_BASE_URL` | frontend | empty | API **origin** for a split deployment, with no trailing `/api` (the SPA adds `/api/...` itself). Leave empty in dev, where Vite proxies `/api` |
 | `VITE_PROXY_TARGET` | frontend | `http://localhost:8080` | Dev-server proxy target |
 
 **Production checklist**
 
-1. Set a unique `JWT_SECRET` of at least 32 characters (`openssl rand -base64 48`).
+1. Set a unique `JWT_SECRET` (`openssl rand -base64 48`). It is mandatory: the API
+   refuses to start without it, so a missing or placeholder value is a startup
+   failure rather than a silent downgrade to a published key.
 2. Point `DB_USERNAME` / `DB_PASSWORD` at a least-privilege account (the app needs
    DML, not DDL — `spring.jpa.hibernate.ddl-auto=validate`).
 3. Set `CORS_ALLOWED_ORIGINS` to the exact frontend origin, never `*`.
@@ -132,14 +155,18 @@ Both applications read their configuration from environment variables.
 
 | Username | Password | Role | Base |
 | --- | --- | --- | --- |
-| `admin` | `admin123` | ADMIN | — (all bases) |
-| `gen.alpha` | `commander123` | BASE_COMMANDER | Alpha Army Base |
-| `gen.bravo` | `commander123` | BASE_COMMANDER | Bravo Army Base |
-| `gen.delta` | `commander123` | BASE_COMMANDER | Delta Forward Base |
-| `logistics` | `logistics123` | LOGISTICS_OFFICER | — |
-| `logistics2` | `logistics123` | LOGISTICS_OFFICER | — |
+| Username | Role | Base |
+| --- | --- | --- |
+| `admin` | ADMIN | — (all bases) |
+| `gen.alpha` | BASE_COMMANDER | Alpha Army Base |
+| `gen.bravo` | BASE_COMMANDER | Bravo Army Base |
+| `gen.delta` | BASE_COMMANDER | Delta Forward Base |
+| `logistics` | LOGISTICS_OFFICER | — |
+| `logistics2` | LOGISTICS_OFFICER | — |
 
-Change or remove these before any real deployment.
+Passwords are deliberately not written down here or in `docs/API.md`. Set
+`DEFAULT_ADMIN_PASSWORD` before the first run, and reset every other seeded
+account's password before any real deployment.
 
 ---
 
@@ -239,6 +266,7 @@ java -jar target/military-asset-management-backend-1.0.0.jar
 
 # Frontend
 cd ..\frontend
+# API origin only - no trailing /api, the SPA appends /api/... itself
 $env:VITE_API_BASE_URL = "https://api.mams.example.com"
 npm run build          # emits frontend/dist
 ```
@@ -281,10 +309,11 @@ uses the **free** plan, which sleeps after 15 minutes; change `plan` to `starter
 when the service must stay reachable.
 
 Point the Vercel project at the repository with **Root Directory = `frontend`**,
-then set `VITE_API_BASE_URL` to the Render URL, for example:
+then set `VITE_API_BASE_URL` to the **API origin**, without a trailing `/api`,
+because the SPA appends its own `/api/...` paths:
 
 ```
-VITE_API_BASE_URL=https://mams-backend-snii.onrender.com/api
+VITE_API_BASE_URL=https://mams-backend-snii.onrender.com
 ```
 
 `VITE_*` values are inlined at build time, so changing it requires a redeploy.
@@ -313,11 +342,13 @@ scratch or moved to a paid plan without rework.
 | Backend exits with `Schema-validation: missing table` | The database was not created from the SQL script. Run `scripts\setup-database.ps1`. |
 | `Access denied for user` | `DB_USERNAME` / `DB_PASSWORD` do not match your MySQL account. |
 | `JWT signature does not validate` | `JWT_SECRET` differs between the processes that issued and use the token; clear the browser session. |
+| `Could not resolve placeholder 'JWT_SECRET'` | The signing key is not set. Add it to the environment and restart; the API will not start without it by design. |
 | UI shows 403 on every page | The signed-in account is a base commander using a token from a previous base assignment; sign out and back in. |
 | CORS error in the browser | Add the browser origin to `CORS_ALLOWED_ORIGINS`. The Vite dev server on port 5173 is allowed by default. |
 | Empty dashboard | The date range excludes all transactions; clear the From/To filters. |
 | `409` on a transfer | The source base does not hold the requested quantity, or source and destination are the same. |
 | Render deploy fails with `Schema-validation` | The database exists but the schema script was never applied. See §10.1. |
 | UI loads but every request fails on a deployed build | `VITE_API_BASE_URL` is empty or wrong. It is inlined at build time, so rebuild after changing it. |
+| Sign-in fails with 404 or 401 and the network tab shows `/api/api/...` | `VITE_API_BASE_URL` ends in `/api`. Set it to the origin only; the SPA appends `/api/...` itself. |
 | Vercel 404 on a deep link such as `/personnel` | The SPA rewrite is missing. `frontend/vercel.json` supplies it; do not delete it. |
 | `Public Key Retrieval is not allowed` | Aiven requires `allowPublicKeyRetrieval=true` in `DB_URL`. |

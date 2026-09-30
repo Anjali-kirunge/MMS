@@ -3,8 +3,9 @@ spring:
     name: military-asset-management-backend
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/military_asset_management?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
+    username: ${DB_USERNAME}
+    # No default password. Supply it through the environment; see .env.example.
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:20}
       minimum-idle: 5
@@ -41,7 +42,11 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:militaryAssetManagementSuperSecretKeyChangeMeInProduction2026_0123456789}
+    # No default on purpose. A committed fallback signing key would let anyone
+    # who can read the repository mint a valid ADMIN token, so the application
+    # refuses to start unless JWT_SECRET is supplied by the environment.
+    # Generate one with: openssl rand -base64 48
+    secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:43200000}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000}
@@ -51,7 +56,9 @@ app:
   bootstrap:
     enabled: ${BOOTSTRAP_ENABLED:true}
     admin-username: ${DEFAULT_ADMIN_USERNAME:admin}
-    admin-password: ${DEFAULT_ADMIN_PASSWORD:admin123}
+    # No default password, even though this only runs on an empty users table.
+    # A committed default here would be a known production credential.
+    admin-password: ${DEFAULT_ADMIN_PASSWORD}
 
 logging:
   file:

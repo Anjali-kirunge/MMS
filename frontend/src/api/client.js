@@ -1,4 +1,4 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+import { buildApiUrl } from './baseUrl.js'
 
 const TOKEN_KEY = 'mams.token'
 const USER_KEY = 'mams.user'
@@ -40,14 +40,6 @@ export function clearSession() {
   localStorage.removeItem(USER_KEY)
 }
 
-function buildUrl(path, params) {
-  const entries = Object.entries(params || {}).filter(
-    ([, value]) => value !== undefined && value !== null && value !== '',
-  )
-  const query = entries.length ? `?${new URLSearchParams(entries)}` : ''
-  return `${BASE_URL}${path}${query}`
-}
-
 function parseBody(text) {
   if (!text) return null
   try {
@@ -63,7 +55,7 @@ export async function request(path, { method = 'GET', body, params } = {}) {
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const response = await fetch(buildUrl(path, params), {
+  const response = await fetch(buildApiUrl(path, params), {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
