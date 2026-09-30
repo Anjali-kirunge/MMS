@@ -23,7 +23,12 @@ param(
     [string]$BaseUrl = "http://localhost:8080",
     [string]$DbUser = "root",
     [string]$DbPassword = "root",
-    [string]$DbName = "military_asset_management"
+    [string]$DbName = "military_asset_management",
+    [string]$DbHost = "",
+    [int]$DbPort = 0,
+    # Managed providers such as Aiven refuse plaintext connections.
+    [ValidateSet("DISABLED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY")]
+    [string]$DbSslMode = "DISABLED"
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,10 +46,17 @@ if (-not $mysql) {
 }
 if (-not $mysql) { throw "mysql client not found; add it to PATH or pass -DbUser/-DbPassword" }
 
+# Host, port and TLS are only passed when supplied, so a local MySQL that is
+# bound to the default socket keeps working unchanged.
+$mysqlTarget = @()
+if ($DbHost) { $mysqlTarget += @("-h", $DbHost) }
+if ($DbPort -gt 0) { $mysqlTarget += @("-P", $DbPort) }
+if ($DbSslMode -ne "DISABLED") { $mysqlTarget += "--ssl-mode=$DbSslMode" }
+
 function Invoke-Sql {
     param([string]$Query)
     $env:MYSQL_PWD = $DbPassword
-    $out = $Query | & $mysql -u $DbUser -N -B $DbName 2>$null
+    $out = $Query | & $mysql @mysqlTarget -u $DbUser -N -B $DbName 2>$null
     Remove-Item Env:\MYSQL_PWD -ErrorAction SilentlyContinue
     # Always hand back an array of rows so callers can index safely even when
     # the query returns exactly one line (PowerShell would collapse it to a string).
@@ -239,11 +251,19 @@ Section "The audit trail recorded the work"
 # Generate the remaining action types so the assertions hold on a freshly seeded
 # database regardless of what ran before this script.
 Invoke-Api -Method POST -Path "/api/auth/login" -Body @{ username = "admin"; password = "definitely-wrong" } | Out-Null
+
+# A unique code per run keeps the script re-runnable. A fixed code collides with
+# the row left behind by an interrupted earlier run, the CREATE then returns 409,
+# and every later reference to the null response body fails.
+$tmpCode = "INTG-{0}-{1}" -f (Get-Date -Format "HHmmss"), $PID
 $tmpBase = Invoke-Api -Method POST -Path "/api/bases" -Token $token -Body @{
-    code = "INTG-TMP"; name = "Integrity Temp Base"; location = "Test"; commander = "None"
+    code = $tmpCode; name = "Integrity Temp Base"; location = "Test"; commander = "None"
+}
+if ($null -eq $tmpBase.Body) {
+    throw "Could not create the temporary base (HTTP $($tmpBase.Status)). Clean up and re-run."
 }
 Invoke-Api -Method PUT -Path "/api/bases/$($tmpBase.Body.id)" -Token $token -Body @{
-    code = "INTG-TMP"; name = "Integrity Temp Base (edited)"; location = "Test"; commander = "None"
+    code = $tmpCode; name = "Integrity Temp Base (edited)"; location = "Test"; commander = "None"
 } | Out-Null
 Invoke-Api -Method DELETE -Path "/api/bases/$($tmpBase.Body.id)" -Token $token | Out-Null
 
