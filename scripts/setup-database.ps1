@@ -10,6 +10,15 @@
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1
     powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 -MysqlPassword "s3cret"
+
+.DESCRIPTION
+    Managed MySQL hosts such as Aiven require TLS, so pass -SslMode REQUIRED
+    when the target is not a local server.
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\scripts\setup-database.ps1 `
+        -Host_ mysql-xxxx.region.aivencloud.com -Port 14711 `
+        -Username avnadmin -Password "s3cret" -SslMode REQUIRED
 #>
 [CmdletBinding()]
 param(
@@ -18,6 +27,9 @@ param(
     [int]$Port = 3306,
     [string]$Username = "root",
     [string]$Password = "root",
+    # Managed MySQL providers such as Aiven require TLS. Local MySQL does not.
+    [ValidateSet("DISABLED", "REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY")]
+    [string]$SslMode = "DISABLED",
     [switch]$DropFirst
 )
 
@@ -51,6 +63,10 @@ $arguments = @(
     "-u", $Username,
     "--default-character-set=utf8mb4"
 )
+
+if ($SslMode -ne "DISABLED") {
+    $arguments += "--ssl-mode=$SslMode"
+}
 
 # Pass the password through MYSQL_PWD rather than -p<password> so it never shows
 # up in the process command line and the client stops printing a warning.

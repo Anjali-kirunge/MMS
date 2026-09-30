@@ -12,7 +12,9 @@ MMS/
 ├── database/         military_asset_management.sql (schema, seed data, reporting view)
 ├── docs/             API.md - full REST reference
 ├── scripts/          setup-database.ps1, rbac-test.ps1, smoke-test.ps1, integrity-test.ps1
-├── render.yaml       Render blueprint for the backend
+├── render.yaml       Render blueprint for the backend container
+├── frontend/vercel.json  Vercel config for the SPA (rewrites, cache headers)
+└── .env.example      every environment variable used by both applications
 └── .env.example      every environment variable used by both applications
 ```
 
@@ -263,56 +265,43 @@ Remove-Item Env:\MYSQL_PWD
 
 Aiven requires TLS. Keep `ssl-mode=REQUIRED` in `DB_URL`.
 
-### 10.2 Backend on Render
+### 10.2 Split deployment: backend on Render, frontend on Vercel
 
-`render.yaml` is a Render blueprint, so the service can be created straight from
-the repository. It builds `backend/Dockerfile` (Maven build, JRE 17 runtime,
-non-root user) and health-checks `/api/health`.
+This is the configuration in use. The Spring Boot API runs as a long-lived Docker
+container on Render, and the static SPA runs on Vercel.
 
-Required environment variables — set them in **Render → your service →
-Environment**, never in the repository:
+| Piece | Where | How it runs |
+| --- | --- | --- |
+| `backend` | Render | `backend/Dockerfile` with Docker context `backend/`, health-checked at `/api/health` |
+| `frontend` | Vercel | Root Directory `frontend/`, native Vite build, output `dist` |
 
-| Variable | Value |
-| --- | --- |
-| `DB_URL` | `jdbc:mysql://<host>:<port>/<database>?ssl-mode=REQUIRED&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8` |
-| `DB_USERNAME` / `DB_PASSWORD` | the production database credentials |
-| `JWT_SECRET` | generated (`sync: false`; use *Generate* if you prefer) |
-| `CORS_ALLOWED_ORIGINS` | the Vercel production URL, e.g. `https://mams-frontend.vercel.app` |
-| `CORS_ALLOWED_ORIGIN_PATTERNS` | `https://*.vercel.app` — already set in the blueprint so preview builds are accepted |
-| `DEFAULT_ADMIN_PASSWORD` | the first administrator's password |
+`render.yaml` is a Render blueprint that builds the same backend. Set `DB_*` and
+`DEFAULT_ADMIN_PASSWORD` in **Render → the service → Environment**. The blueprint
+uses the **free** plan, which sleeps after 15 minutes; change `plan` to `starter`
+when the service must stay reachable.
 
-`SERVER_PORT` is not required: the app reads the `PORT` variable Render injects.
+Point the Vercel project at the repository with **Root Directory = `frontend`**,
+then set `VITE_API_BASE_URL` to the Render URL, for example:
 
-The blueprint uses the **free** plan. A free instance sleeps after 15 minutes
-without traffic, so the API is intermittently unavailable, cold starts can exceed
-a minute, and the database connection is dropped while it sleeps. Change `plan`
-to `starter` in `render.yaml` when the service needs to stay reachable.
+```
+VITE_API_BASE_URL=https://mams-backend-snii.onrender.com/api
+```
 
-Deploy the backend **first**, then deploy the frontend, because the frontend build
-bakes in the backend URL.
+`VITE_*` values are inlined at build time, so changing it requires a redeploy.
+Because the two are on different origins, the Render service must allow the Vercel
+origin: set `CORS_ALLOWED_ORIGINS` to the Vercel URL and
+`CORS_ALLOWED_ORIGIN_PATTERNS` to `https://*.vercel.app` so preview deployments
+are accepted.
 
-### 10.3 Frontend on Vercel
-
-Point a Vercel project at the repository with **Root Directory = `frontend`**.
-`frontend/vercel.json` supplies the build command, the `dist` output directory and
-the SPA rewrite so client-side routes survive a hard refresh.
-
-Set this environment variable in the Vercel project:
-
-| Variable | Value |
-| --- | --- |
-| `VITE_API_BASE_URL` | the full Render URL, e.g. `https://mams-backend.onrender.com` |
-
-`VITE_*` values are inlined at build time, so a change requires a redeploy.
+`render.yaml` remains in the repository so the service can be recreated from
+scratch or moved to a paid plan without rework.
 
 ### 10.4 Order of operations
 
-1. Provision MySQL and apply the schema.
-2. Deploy the backend, wait for `/api/health` to return `200`.
-3. Add the Render URL to the Vercel project's `VITE_API_BASE_URL`.
-4. Deploy the frontend, then add the Vercel URL to the backend's
-   `CORS_ALLOWED_ORIGINS` and redeploy the backend.
-5. Sign in and walk one transaction of each type per role; confirm the audit log
+1. Provision MySQL and apply the schema (§10.1). The backend validates the schema
+   on startup and will not start without it.
+2. Deploy, then wait for `https://<your-domain>/api/health` to return `200`.
+3. Sign in and walk one transaction of each type per role; confirm the audit log
    records them and that the figures survive a hard refresh.
 
 ---
